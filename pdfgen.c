@@ -1783,6 +1783,96 @@ int pdf_add_text_wrap(struct pdf_doc *pdf, struct pdf_object *page,
     return 0;
 }
 
+int pdf_add_text_rotated(struct pdf_doc *pdf, struct pdf_object *page,
+                         const char *text, float size, float xoff, float yoff,
+                         uint32_t colour, float angle)
+{
+    int ret;
+    size_t len = text ? strlen(text) : 0;
+    struct dstr str = INIT_DSTR;
+    int alpha = (colour >> 24) >> 4;
+
+    /* Don't bother adding empty/null strings */
+    if (!len)
+        return 0;
+
+    dstr_append(&str, "BT ");
+    dstr_append(&str, "q ");
+    dstr_printf(&str, "/GS%d gs ", alpha);
+    dstr_printf(&str, "%f %f %f %f 0 0 Tm ", cos(angle), -sin(angle),
+                sin(angle), cos(angle));
+    dstr_printf(&str, "1 0 0 1 %f %f cm ", xoff, yoff);
+    dstr_printf(&str, "TL ");
+    dstr_printf(&str, "/F%d %f Tf ", pdf->current_font->font.index, size);
+    dstr_printf(&str, "%f %f %f rg ", PDF_RGB_R(colour), PDF_RGB_G(colour),
+                PDF_RGB_B(colour));
+    dstr_printf(&str, "%f Tc ", 0.0);
+    dstr_append(&str, "(");
+
+    /* Escape magic characters properly */
+    for (size_t i = 0; i < len;) {
+        uint32_t code;
+        int code_len;
+        code_len = utf8_to_utf32(&text[i], len - i, &code);
+        if (code_len < 0) {
+            dstr_free(&str);
+            return pdf_set_err(pdf, -EINVAL, "Invalid UTF-8 encoding");
+        }
+
+        if (code > 255) {
+            /* We support *some* minimal UTF-8 characters */
+            char buf[5] = {0};
+            switch (code) {
+            case 0x160:
+                buf[0] = '\x8a';
+                break;
+            case 0x161:
+                buf[0] = '\x9a';
+                break;
+            case 0x17d:
+                buf[0] = '\x8e';
+                break;
+            case 0x17e:
+                buf[0] = '\x9e';
+                break;
+            case 0x20ac:
+                strcpy(buf, "\\200");
+                break;
+            default:
+                dstr_free(&str);
+                return pdf_set_err(pdf, -EINVAL,
+                                   "Unsupported UTF-8 character: 0x%x 0o%o",
+                                   code, code);
+            }
+            dstr_append(&str, buf);
+        } else if (strchr("()\\", code)) {
+            char buf[3];
+            /* Escape some characters */
+            buf[0] = '\\';
+            buf[1] = code;
+            buf[2] = '\0';
+            dstr_append(&str, buf);
+        } else if (strrchr("\n\r\t\b\f", code)) {
+            /* Skip over these characters */
+            ;
+        } else {
+            char buf[2];
+            buf[0] = code;
+            buf[1] = '\0';
+            dstr_append(&str, buf);
+        }
+
+        i += code_len;
+    }
+    dstr_append(&str, ") Tj ");
+    dstr_append(&str, "Q ");
+    dstr_append(&str, "ET");
+
+    ret = pdf_add_stream(pdf, page, dstr_data(&str));
+    dstr_free(&str);
+    return ret;
+}
+
 int pdf_add_line(struct pdf_doc *pdf, struct pdf_object *page, float x1,
                  float y1, float x2, float y2, float width, uint32_t colour)
 {
