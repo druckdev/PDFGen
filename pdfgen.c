@@ -1785,7 +1785,8 @@ int pdf_add_text_wrap(struct pdf_doc *pdf, struct pdf_object *page,
 
 int pdf_add_text_rotated(struct pdf_doc *pdf, struct pdf_object *page,
                          const char *text, float size, float xoff, float yoff,
-                         uint32_t colour, float angle)
+                         float width, float height, uint32_t colour,
+                         float angle)
 {
     int ret;
     size_t len = text ? strlen(text) : 0;
@@ -1796,12 +1797,29 @@ int pdf_add_text_rotated(struct pdf_doc *pdf, struct pdf_object *page,
     if (!len)
         return 0;
 
+    /* Compute only once */
+    float angle_cos = cos(angle);
+    float angle_sin = sin(angle);
+
+    float center_x = width / 2.0;
+    float center_y = height / 2.0;
+
+    /**
+     * This simulates a translation to (xoff, yoff) and then a rotation around
+     * the center of the text field instead of the left bottom corner.
+     * This is done by translating by (center_x, center_y) and reverting this
+     * after the rotation was done.
+     */
+    float xoff_centered =
+        xoff + center_x + -center_x * angle_cos + -center_y * angle_sin;
+    float yoff_centered =
+        yoff + center_y + -center_x * -angle_sin + -center_y * angle_cos;
+
     dstr_append(&str, "BT ");
     dstr_append(&str, "q ");
     dstr_printf(&str, "/GS%d gs ", alpha);
-    dstr_printf(&str, "%f %f %f %f 0 0 Tm ", cos(angle), -sin(angle),
-                sin(angle), cos(angle));
-    dstr_printf(&str, "1 0 0 1 %f %f cm ", xoff, yoff);
+    dstr_printf(&str, "%f %f %f %f %f %f Tm ", angle_cos, -angle_sin,
+                angle_sin, angle_cos, xoff_centered, yoff_centered);
     dstr_printf(&str, "TL ");
     dstr_printf(&str, "/F%d %f Tf ", pdf->current_font->font.index, size);
     dstr_printf(&str, "%f %f %f rg ", PDF_RGB_R(colour), PDF_RGB_G(colour),

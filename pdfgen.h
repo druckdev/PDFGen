@@ -325,13 +325,16 @@ int pdf_add_text_wrap(struct pdf_doc *pdf, struct pdf_object *page,
  * @param size Point size of the font
  * @param xoff X location to put it in
  * @param yoff Y location to put it in
+ * @param width Width of the text field that is rotated
+ * @param height Height of the text field that is rotated
  * @param colour Colour to draw the text
  * @param angle Angle of the rotated text
  * @return 0 on success, < 0 on failure
  */
 int pdf_add_text_rotated(struct pdf_doc *pdf, struct pdf_object *page,
                          const char *text, float size, float xoff, float yoff,
-                         uint32_t colour, float angle);
+                         float width, float height, uint32_t colour,
+                         float angle);
 
 /**
  * Add a line to the document
