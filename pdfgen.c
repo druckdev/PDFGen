@@ -1785,7 +1785,7 @@ int pdf_add_text_wrap(struct pdf_doc *pdf, struct pdf_object *page,
 
 int pdf_add_text_rotated(struct pdf_doc *pdf, struct pdf_object *page,
                          const char *text, float size, float xoff, float yoff,
-                         float width, float height, uint32_t colour,
+                         float anchor_x, float anchor_y, uint32_t colour,
                          float angle)
 {
     int ret;
@@ -1801,19 +1801,21 @@ int pdf_add_text_rotated(struct pdf_doc *pdf, struct pdf_object *page,
     float angle_cos = cos(angle);
     float angle_sin = sin(angle);
 
-    float center_x = width / 2.0;
-    float center_y = height / 2.0;
+    float delta_anchor_x = anchor_x - xoff;
+    float delta_anchor_y = anchor_y - yoff;
 
     /**
      * This simulates a translation to (xoff, yoff) and then a rotation around
-     * the center of the text field instead of the left bottom corner.
-     * This is done by translating by (center_x, center_y) and reverting this
-     * after the rotation was done.
+     * the anchor instead of the left bottom corner of the text field.
+     * This is done by translating by (delta_anchor_x, delta_anchor_y) and
+     * reverting this after the rotation was done.
      */
-    float xoff_centered =
-        xoff + center_x + -center_x * angle_cos + -center_y * angle_sin;
-    float yoff_centered =
-        yoff + center_y + -center_x * -angle_sin + -center_y * angle_cos;
+    float xoff_centered = xoff + delta_anchor_x +
+                          -delta_anchor_x * angle_cos +
+                          -delta_anchor_y * angle_sin;
+    float yoff_centered = yoff + delta_anchor_y +
+                          -delta_anchor_x * -angle_sin +
+                          -delta_anchor_y * angle_cos;
 
     dstr_append(&str, "BT ");
     dstr_append(&str, "q ");
